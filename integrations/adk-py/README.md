@@ -136,6 +136,30 @@ Once you've set up the integration, you can view your traces in the Braintrust d
    - Token usage and latency metrics
    - Any errors or warnings
 
+## Development
+
+To contribute to this integration:
+
+```bash
+# Clone the repository
+git clone https://github.com/braintrustdata/braintrust-sdk-python.git
+cd sdk/integrations/adk-py
+
+mise install
+uv sync
+
+# Run examples
+cd examples
+
+# simple programmatic agent call
+uv run manual.py
+
+# or use the adk web UI
+uv run adk web --port 8888
+```
+
+If your shell is not configured with `mise activate`, prefix commands with `mise exec --`.
+
 ## Documentation
 
 - [Braintrust Documentation](https://www.braintrust.dev/docs)
