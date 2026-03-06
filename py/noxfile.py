@@ -77,6 +77,7 @@ DSPY_VERSIONS = (LATEST,)
 GOOGLE_ADK_VERSIONS = (LATEST, "1.14.1")
 # temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
 TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
+PYTEST_VERSIONS = (LATEST, "8.4.2")
 
 
 @nox.session()
@@ -255,6 +256,14 @@ def test_cli(session):
 
 
 @nox.session()
+@nox.parametrize("version", PYTEST_VERSIONS, ids=PYTEST_VERSIONS)
+def test_pytest_plugin(session, version):
+    _install_test_deps(session)
+    _install(session, "pytest", version)
+    _run_tests(session, f"{WRAPPER_DIR}/pytest_plugin/test_plugin.py")
+
+
+@nox.session()
 def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
@@ -390,6 +399,11 @@ def _run_tests(session, test_path, ignore_path="", ignore_paths=None, env=None):
         # Run the tests in the src directory
         test_args = [
             "pytest",
+            # Disable the braintrust pytest plugin (registered via pytest11 entry
+            # point) to avoid ImportPathMismatchError when the installed package
+            # and the source tree both contain braintrust/conftest.py.
+            "-p",
+            "no:braintrust",
             f"src/{test_path}",
         ]
         for path in paths_to_ignore:
