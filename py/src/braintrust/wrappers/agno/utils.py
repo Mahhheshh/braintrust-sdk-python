@@ -94,6 +94,12 @@ def extract_metadata(instance: Any, component: str) -> dict[str, Any]:
         model = getattr(instance, "model", None)
         if model:
             metadata["model"] = getattr(model, "id", None) or model.__class__.__name__
+    elif component == "workflow":
+        metadata["workflow_id"] = getattr(instance, "id", None)
+        metadata["workflow_name"] = getattr(instance, "name", None)
+        steps = getattr(instance, "steps", None)
+        if steps:
+            metadata["steps_count"] = len(steps)
 
     return metadata
 
@@ -384,6 +390,54 @@ def _aggregate_agent_chunks(chunks: list[Any]) -> dict[str, Any]:
                         },
                     }
                 )
+
+    return {k: v for k, v in aggregated.items() if v not in (None, "")}
+
+
+def _aggregate_workflow_chunks(chunks: list[Any], workflow_run_response: Any | None = None) -> dict[str, Any]:
+    """Aggregate workflow/step events into a final workflow-style response."""
+    aggregated = {
+        "content": "",
+        "status": None,
+        "metrics": None,
+    }
+    final_workflow_content = None
+
+    for chunk in chunks:
+        event = getattr(chunk, "event", None)
+
+        if hasattr(chunk, "content") and chunk.content:
+            if event == "WorkflowCompleted":
+                final_workflow_content = str(chunk.content)
+            elif final_workflow_content is None:
+                aggregated["content"] += str(chunk.content)
+
+        if hasattr(chunk, "status") and chunk.status:
+            aggregated["status"] = chunk.status
+
+        if hasattr(chunk, "metrics") and chunk.metrics:
+            parsed_metrics = parse_metrics_from_agno(chunk.metrics)
+            aggregated["metrics"] = parsed_metrics if parsed_metrics else chunk.metrics
+
+    if final_workflow_content is not None:
+        accumulated_content = aggregated["content"]
+        if not accumulated_content:
+            aggregated["content"] = final_workflow_content
+        elif accumulated_content.endswith(final_workflow_content):
+            aggregated["content"] = accumulated_content
+        else:
+            aggregated["content"] = f"{accumulated_content}{final_workflow_content}"
+
+    if workflow_run_response is not None:
+        if not aggregated["content"] and hasattr(workflow_run_response, "content") and workflow_run_response.content:
+            aggregated["content"] = str(workflow_run_response.content)
+
+        if not aggregated["status"] and hasattr(workflow_run_response, "status") and workflow_run_response.status:
+            aggregated["status"] = workflow_run_response.status
+
+        if not aggregated["metrics"] and hasattr(workflow_run_response, "metrics") and workflow_run_response.metrics:
+            parsed_metrics = parse_metrics_from_agno(workflow_run_response.metrics)
+            aggregated["metrics"] = parsed_metrics if parsed_metrics else workflow_run_response.metrics
 
     return {k: v for k, v in aggregated.items() if v not in (None, "")}
 
