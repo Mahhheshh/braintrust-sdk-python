@@ -460,6 +460,69 @@ async def test_multiple_bundled_subagents_keep_outer_orchestration_separate(memo
     ), "Expected delegated tool spans to nest under delegated LLM spans"
 
 
+@pytest.mark.skipif(not CLAUDE_SDK_AVAILABLE, reason="Claude Agent SDK not installed")
+@pytest.mark.asyncio
+async def test_five_parallel_bundled_subagents_preserve_task_parenting(memory_logger, tmp_path):
+    assert not memory_logger.pop()
+    if not _sdk_version_at_least("0.1.48"):
+        pytest.skip("Bundled subagent task events were not observed on older Claude Agent SDK versions")
+
+    workspace = tmp_path / "subagent_parenting_workspace"
+    workspace.mkdir()
+    for i in range(5):
+        (workspace / f"note_{i}.txt").write_text(f"label={i}\nowner=owner_{i}\n", encoding="utf-8")
+
+    with _patched_claude_sdk(wrap_client=True):
+        options = claude_agent_sdk.ClaudeAgentOptions(
+            model=TEST_MODEL,
+            cwd=workspace,
+            permission_mode="bypassPermissions",
+            max_turns=20,
+        )
+        transport = make_cassette_transport(
+            cassette_name="test_five_parallel_bundled_subagents_preserve_task_parenting",
+            prompt="",
+            options=options,
+        )
+
+        async with claude_agent_sdk.ClaudeSDKClient(options=options, transport=transport) as client:
+            await client.query(
+                "Use exactly five bundled general-purpose subagents, one for each file note_0.txt through note_4.txt. "
+                "In your first assistant response, emit all five Agent tool calls before waiting for any subagent result. "
+                "Do not emit explanatory text before or between the Agent tool calls if the tool API allows it. "
+                "Each delegated subagent must use Read on exactly its assigned file and return only label=<n> | owner=<owner>. "
+                "After all five finish, reply with exactly five lines in order 0 through 4. "
+                "Do not answer directly without using all five subagents."
+            )
+            async for message in client.receive_response():
+                if type(message).__name__ == "ResultMessage":
+                    break
+
+    spans = memory_logger.pop()
+    task_spans = _find_spans_by_type(spans, SpanTypeAttribute.TASK)
+    tool_spans = _find_spans_by_type(spans, SpanTypeAttribute.TOOL)
+
+    root_task_span = _find_span_by_name(task_spans, "Claude Agent")
+    subagent_spans = [span for span in task_spans if span["span_id"] != root_task_span["span_id"]]
+    assert len(subagent_spans) == 5, f"Expected 5 delegated task spans, got {len(subagent_spans)}"
+
+    agent_tool_spans_by_id = {
+        span.get("metadata", {}).get("gen_ai.tool.call.id"): span
+        for span in tool_spans
+        if span["span_attributes"]["name"] == "Agent"
+    }
+    assert len(agent_tool_spans_by_id) == 5, f"Expected 5 Agent tool spans, got {len(agent_tool_spans_by_id)}"
+
+    for subagent_span in subagent_spans:
+        tool_use_id = subagent_span.get("metadata", {}).get("tool_use_id")
+        assert tool_use_id, f"Expected task span metadata to include tool_use_id: {subagent_span}"
+        agent_tool_span = agent_tool_spans_by_id.get(tool_use_id)
+        assert agent_tool_span is not None, f"Missing Agent tool span for tool_use_id={tool_use_id}"
+        assert agent_tool_span["span_id"] in subagent_span["span_parents"]
+        assert root_task_span["span_id"] not in subagent_span["span_parents"]
+        assert agent_tool_span["metrics"]["end"] >= subagent_span["metrics"]["end"]
+
+
 @pytest.mark.asyncio
 async def test_delegated_subagent_llm_and_tool_spans_nest_under_task_span(memory_logger):
     assert not memory_logger.pop()
@@ -1057,6 +1120,21 @@ class FakeClaudeSDKClient:
         return None
 
 
+class FakeCancelledClaudeSDKClient(FakeClaudeSDKClient):
+    """Simulates the real error: messages are yielded, then CancelledError on stream close.
+
+    The real error comes from anyio's MemoryObjectReceiveStream when the Claude
+    subprocess connection closes — the internal ``await receive_event.wait()``
+    raises ``asyncio.CancelledError`` even though the asyncio Task itself is
+    *not* being cancelled.
+    """
+
+    async def receive_response(self):
+        for message in self.messages:
+            yield message
+        raise asyncio.CancelledError
+
+
 def _find_spans_by_type(spans: list[dict[str, Any]], span_type: str) -> list[dict[str, Any]]:
     return [span for span in spans if span.get("span_attributes", {}).get("type") == span_type]
 
@@ -1085,6 +1163,140 @@ def _find_span_by_name(spans: list[dict[str, Any]], name: str) -> dict[str, Any]
 def _clear_tool_span_tracker() -> None:
     if hasattr(_thread_local, "tool_span_tracker"):
         delattr(_thread_local, "tool_span_tracker")
+
+
+@pytest.mark.asyncio
+async def test_receive_response_suppresses_unexpected_cancelled_error_empty_stream(memory_logger):
+    """CancelledError on an empty stream is suppressed without error."""
+    assert not memory_logger.pop()
+
+    wrapped_client_class = _create_client_wrapper_class(FakeCancelledClaudeSDKClient)
+    client = wrapped_client_class()
+    # No messages — CancelledError fires immediately on iteration.
+
+    await client.query("Delegate this task.")
+    received = []
+    async for message in client.receive_response():
+        received.append(message)
+
+    assert received == []
+
+    spans = memory_logger.pop()
+    task_spans = _find_spans_by_type(spans, SpanTypeAttribute.TASK)
+    assert len(task_spans) == 1
+    assert task_spans[0]["span_attributes"]["name"] == "Claude Agent"
+    assert task_spans[0].get("error") is None
+
+
+@pytest.mark.asyncio
+async def test_receive_response_suppresses_cancelled_error_after_messages(memory_logger):
+    """CancelledError after real messages still logs output and doesn't propagate."""
+    assert not memory_logger.pop()
+
+    wrapped_client_class = _create_client_wrapper_class(FakeCancelledClaudeSDKClient)
+    client = wrapped_client_class()
+    client._WrappedClaudeSDKClient__client.messages = [  # type: ignore[attr-defined]
+        AssistantMessage(content=[TextBlock("The answer is 42.")]),
+        ResultMessage(),
+    ]
+
+    await client.query("What is the meaning of life?")
+    received = []
+    async for message in client.receive_response():
+        received.append(message)
+
+    # All messages yielded before the CancelledError should be received.
+    assert len(received) == 2
+
+    spans = memory_logger.pop()
+    task_spans = _find_spans_by_type(spans, SpanTypeAttribute.TASK)
+    assert len(task_spans) == 1
+    task_span = task_spans[0]
+    assert task_span["span_attributes"]["name"] == "Claude Agent"
+    assert task_span.get("error") is None
+    # Output should still be logged despite the CancelledError at stream close.
+    assert task_span.get("output") is not None
+    assert task_span["output"]["role"] == "assistant"
+
+    llm_spans = _find_spans_by_type(spans, SpanTypeAttribute.LLM)
+    assert len(llm_spans) == 1
+
+
+class FakeCancelledMidStreamClaudeSDKClient(FakeClaudeSDKClient):
+    """CancelledError fires *between* messages, simulating cancellation mid-stream."""
+
+    async def receive_response(self):
+        yield self.messages[0]
+        raise asyncio.CancelledError
+
+
+@pytest.mark.asyncio
+async def test_receive_response_suppresses_cancelled_error_mid_stream(memory_logger):
+    """CancelledError between messages still yields partial results and logs output."""
+    assert not memory_logger.pop()
+
+    wrapped_client_class = _create_client_wrapper_class(FakeCancelledMidStreamClaudeSDKClient)
+    client = wrapped_client_class()
+    client._WrappedClaudeSDKClient__client.messages = [  # type: ignore[attr-defined]
+        AssistantMessage(content=[TextBlock("Partial answer.")]),
+        # Second message never arrives — CancelledError fires instead.
+        AssistantMessage(content=[TextBlock("This should not be received.")]),
+    ]
+
+    await client.query("Tell me something.")
+    received = []
+    async for message in client.receive_response():
+        received.append(message)
+
+    # Only the first message should be received.
+    assert len(received) == 1
+
+    spans = memory_logger.pop()
+    task_spans = _find_spans_by_type(spans, SpanTypeAttribute.TASK)
+    assert len(task_spans) == 1
+    task_span = task_spans[0]
+    assert task_span.get("error") is None
+    assert task_span.get("output") is not None
+    assert task_span["output"]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_genuine_task_cancel_propagates_after_receive_response(memory_logger):
+    """When the asyncio Task is genuinely cancelled, CancelledError propagates
+    at the caller's next await — not swallowed forever.
+
+    This verifies that suppressing CancelledError inside the generator does not
+    permanently disarm a real ``task.cancel()`` on Python 3.12+ (where the
+    cancellation counter is decremented when the exception is caught).  On
+    Python < 3.12 the behaviour is the same because the task cancel flag is
+    sticky until the CancelledError propagates.
+    """
+    assert not memory_logger.pop()
+
+    wrapped_client_class = _create_client_wrapper_class(FakeCancelledClaudeSDKClient)
+    client = wrapped_client_class()
+    client._WrappedClaudeSDKClient__client.messages = [  # type: ignore[attr-defined]
+        AssistantMessage(content=[TextBlock("Hello.")]),
+        ResultMessage(),
+    ]
+
+    await client.query("Hi")
+
+    async def _drain_and_sleep():
+        """Consume the stream, then await something else."""
+        async for _ in client.receive_response():
+            pass
+        # This is the "next await" after the generator ends.
+        await asyncio.sleep(0)
+
+    task = asyncio.ensure_future(_drain_and_sleep())
+    # Let the task start and begin iterating.
+    await asyncio.sleep(0)
+    # Genuinely cancel the task from outside.
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
 
 
 @pytest.mark.parametrize(
