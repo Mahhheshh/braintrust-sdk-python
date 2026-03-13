@@ -34,25 +34,22 @@ def _pydantic_to_json_schema(model: Any) -> dict[str, Any]:
         raise ValueError(f"Cannot convert {model} to JSON schema - not a pydantic model")
 
 
-def _extract_pydantic_fields(schema: dict[str, dict[str, Any]]) -> tuple[Any, Any] | tuple[dict[str, Any], dict[str, Any]]:
+def _extract_pydantic_fields(
+    schema: dict[str, dict[str, Any]],
+) -> tuple[Any, Any] | tuple[dict[str, Any], dict[str, Any]]:
     """Extract pydantic fields default and description metadata"""
     flatten_defaults = {}
     flatten_description = {}
     schema_items = schema.items()
-    if len(schema_items) == 1:
+    if len(schema_items) == 1 and "value" in schema:
         for _, field_metadata in schema_items:
-            return (
-                field_metadata.get("default"),
-                field_metadata.get("description")
-            )
+            return (field_metadata.get("default"), field_metadata.get("description"))
 
     for field_name, field_metadata in schema_items:
         flatten_defaults[field_name] = field_metadata.get("default")
         flatten_description[field_name] = field_metadata.get("description")
-    return (
-        flatten_defaults,
-        flatten_description
-    )
+    return (flatten_defaults, flatten_description)
+
 
 def validate_parameters(
     parameters: dict[str, Any],
@@ -169,7 +166,7 @@ def parameters_to_json_schema(parameters: EvalParameters) -> dict[str, Any]:
                     "type": "data",
                     "schema": pydantic_schema,
                     "default": model_defaults,
-                    "description": model_descriptions
+                    "description": model_descriptions,
                 }
             except ValueError:
                 # Not a pydantic model, skip

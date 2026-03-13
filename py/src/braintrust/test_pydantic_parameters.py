@@ -8,6 +8,7 @@ DEFAULT_DESCRIPTION = "System prompt for the model"
 SCHEMA_TITLE = "SystemPrompt"
 PARAM_NAME = "system_prompt"
 
+
 def test_extract_single_field_with_default_and_description():
     schema = {
         "value": {"type": "string", "default": DEFAULT_VALUE, "description": DEFAULT_DESCRIPTION},
@@ -63,6 +64,7 @@ def v2_model():
         }
         del model.get
         return model
+
     return _make
 
 
@@ -78,6 +80,7 @@ def v1_model():
         }
         del model.get
         return model
+
     return _make
 
 
@@ -95,6 +98,7 @@ def v2_multi_field_model():
         }
         del model.get
         return model
+
     return _make
 
 
@@ -113,6 +117,7 @@ def v1_multi_field_model():
         }
         del model.get
         return model
+
     return _make
 
 
@@ -138,7 +143,10 @@ def test_pydantic_v2_multi_field_model(v2_multi_field_model):
     assert schema[PARAM_NAME]["type"] == "data"
     assert schema[PARAM_NAME]["schema"]["title"] == "ModelConfig"
     assert schema[PARAM_NAME]["default"] == {"temperature": 0.7, "max_tokens": 1024}
-    assert schema[PARAM_NAME]["description"] == {"temperature": "Sampling temperature", "max_tokens": "Maximum tokens to generate"}
+    assert schema[PARAM_NAME]["description"] == {
+        "temperature": "Sampling temperature",
+        "max_tokens": "Maximum tokens to generate",
+    }
 
 
 def test_pydantic_v1_multi_field_model(v1_multi_field_model):
