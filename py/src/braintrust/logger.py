@@ -817,11 +817,14 @@ class HTTPConnection:
 
     async def aget_json(
         self, object_type: str, args: Optional[Mapping[str, Any]] = None, retries: int = 0
-    ) -> Mapping[str, Any]:
+    ) -> Mapping[str, Any] | None:
         """
         Async version of get_json. Makes a true async HTTP GET request and returns JSON response.
         """
+        from importlib.util import find_spec
+
         tries = retries + 1
+        use_urllib = find_spec("aiohttp") is None
 
         for i in range(tries):
             try:
@@ -831,8 +834,7 @@ class HTTPConnection:
                     url += "?" + urlencode(_strip_nones(args))
 
                 # check if aiohttp is available, otherwise fall back to asyncio approach
-                from importlib.util import find_spec
-                if find_spec("aiohttp") is None:
+                if use_urllib:
                     # Fall back to asyncio + urllib approach
                     return await self._make_asyncio_request(url)
                 return await self._make_aiohttp_request(url)
@@ -864,7 +866,8 @@ class HTTPConnection:
 
     async def _make_asyncio_request(self, url: str) -> Mapping[str, Any]:
         """Make async HTTP request using asyncio and urllib (fallback)"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
+        timeout_secs = parse_env_var_float("BRAINTRUST_HTTP_TIMEOUT", 60.0)
 
         def sync_request():
             request = Request(url)
@@ -872,14 +875,12 @@ class HTTPConnection:
                 request.add_header("Authorization", f"Bearer {self.token}")
 
             try:
-                response_obj = urlopen(request)
+                response_obj = urlopen(request, timeout=timeout_secs)
                 response_data = response_obj.read()
                 return json.loads(response_data.decode("utf-8"))
             except HTTPError as e:
-                if e.code >= 400:
-                    error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
-                    raise Exception(f"HTTP {e.code}: {error_body}")
-                raise
+                error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+                raise Exception(f"HTTP {e.code}: {error_body}")
             except URLError as e:
                 raise Exception(f"URL Error: {e}")
 
@@ -2244,8 +2245,10 @@ async def aload_prompt(
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     project_id: Optional[str] = None,
+    prompt_id: str | None = None,
     defaults: Optional[Mapping[str, Any]] = None,
     no_trace: bool = False,
+    environment: str | None = None,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
@@ -2257,50 +2260,75 @@ async def aload_prompt(
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
     :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :param prompt_id: The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
+    :param environment: The environment to load the prompt from. If both `version` and `environment` are provided, `version` takes precedence.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The prompt object.
     """
+    effective_environment = None
+    if version is None:
+        effective_environment = environment
 
-    if not project and not project_id:
+    if prompt_id:
+        pass
+    elif not project and not project_id:
         raise ValueError("Must specify at least one of project or project_id")
-    if not slug:
+    elif not slug:
         raise ValueError("Must specify slug")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
+    response = None
 
     try:
         # Run login in thread pool since it's synchronous
         await loop.run_in_executor(HTTP_REQUEST_THREAD_POOL, login, app_url, api_key, org_name)
+        if prompt_id:
+            args = _populate_args({}, version=version, environment=effective_environment)
 
-        # Make async HTTP request
-        args = _populate_args(
-            {
-                "project_name": project,
-                "project_id": project_id,
-                "slug": slug,
-                "version": version,
-            },
-        )
+            response = await _state.api_conn().aget_json(f"/v1/prompt/{prompt_id}", args)
 
-        response = await _state.api_conn().aget_json("/v1/prompt", args)
+            if response:
+                response = {"objects": [response]}
+
+        else:
+            args = _populate_args(
+                {},
+                project_name=project,
+                project_id=project_id,
+                slug=slug,
+                version=version,
+                environment=effective_environment,
+            )
+
+            response = await _state.api_conn().aget_json("/v1/prompt", args)
 
     except Exception as server_error:
+        # If environment or version was specified, don't fall back to cache
+        if effective_environment is not None or version is not None:
+            raise ValueError(f"Prompt not found with specified parameters") from server_error
+
         eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
         try:
-            cache_result = await loop.run_in_executor(
-                HTTP_REQUEST_THREAD_POOL,
-                lambda: _state._prompt_cache.get(
-                    slug,
-                    version=str(version) if version else "latest",
-                    project_id=project_id,
-                    project_name=project,
-                ),
-            )
+            if prompt_id:
+                cache_result = await loop.run_in_executor(
+                    HTTP_REQUEST_THREAD_POOL,
+                    lambda: _state._prompt_cache.get(id=prompt_id),
+                )
+            else:
+                cache_result = await loop.run_in_executor(
+                    HTTP_REQUEST_THREAD_POOL,
+                    lambda: _state._prompt_cache.get(
+                        slug,
+                        version=str(version) if version else "latest",
+                        project_id=project_id,
+                        project_name=project,
+                    ),
+                )
             # Return Prompt with pre-computed metadata from cache
             return Prompt(
                 lazy_metadata=LazyValue(lambda: cache_result, use_mutex=True),
@@ -2308,13 +2336,23 @@ async def aload_prompt(
                 no_trace=no_trace,
             )
         except Exception as cache_error:
+            if prompt_id:
+                raise ValueError(
+                    f"Prompt with id {prompt_id} not found (not found on server or in local cache): {cache_error}"
+                ) from server_error
             raise ValueError(
                 f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
             ) from server_error
 
     if response is None or "objects" not in response or len(response["objects"]) == 0:
+        if prompt_id:
+            raise ValueError(f"Prompt with id {prompt_id} not found.")
+
         raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
     elif len(response["objects"]) > 1:
+        if prompt_id:
+            raise ValueError(f"Multiple prompts found with id {prompt_id}. This should never happen.")
+
         raise ValueError(
             f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
         )
@@ -2322,16 +2360,23 @@ async def aload_prompt(
     resp_prompt = response["objects"][0]
     prompt_metadata = PromptSchema.from_dict_deep(resp_prompt)
     try:
-        await loop.run_in_executor(
-            HTTP_REQUEST_THREAD_POOL,
-            lambda: _state._prompt_cache.set(
-                slug,
-                str(version) if version else "latest",
-                prompt_metadata,
-                project_id=project_id,
-                project_name=project,
-            ),
-        )
+        # save prompt to cache
+        if prompt_id:
+            await loop.run_in_executor(
+                HTTP_REQUEST_THREAD_POOL,
+                lambda: _state._prompt_cache.set(prompt_metadata, id=prompt_id),
+            )
+        else:
+            await loop.run_in_executor(
+                HTTP_REQUEST_THREAD_POOL,
+                lambda: _state._prompt_cache.set(
+                    prompt_metadata,
+                    slug=slug,
+                    version=str(version) if version else "latest",
+                    project_id=project_id,
+                    project_name=project,
+                ),
+            )
     except Exception as e:
         eprint(f"Failed to store prompt in cache: {e}")
 

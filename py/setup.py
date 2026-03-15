@@ -13,7 +13,6 @@ with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
 install_requires = [
-    "aiohttp",
     "GitPython",
     "requests",
     "chevron",
@@ -34,7 +33,7 @@ extras_require = {
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],
     # orjson is not compatible with PyPy, so we exclude it for that platform
-    "performance": ["orjson; platform_python_implementation != 'PyPy'"],
+    "performance": ["orjson; platform_python_implementation != 'PyPy'", "aiohttp"],
     "temporal": ["temporalio>=1.19.0; python_version>='3.10'"],
 }
 
