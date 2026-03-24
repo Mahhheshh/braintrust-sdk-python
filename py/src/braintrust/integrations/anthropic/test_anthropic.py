@@ -9,7 +9,7 @@ from pathlib import Path
 import anthropic
 import pytest
 from braintrust import logger
-from braintrust.integrations.anthropic import wrap_anthropic
+from braintrust.integrations.anthropic import AnthropicIntegration, wrap_anthropic
 from braintrust.test_helpers import init_test_logger
 
 
@@ -490,6 +490,25 @@ async def test_anthropic_beta_messages_streaming_async(memory_logger):
     assert metrics["prompt_tokens"] == usage.input_tokens
     assert metrics["completion_tokens"] == usage.output_tokens
     assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
+
+
+@pytest.mark.vcr
+def test_setup_creates_spans(memory_logger):
+    """`AnthropicIntegration.setup()` should create spans when making API calls."""
+    AnthropicIntegration.setup()
+
+    client = anthropic.Anthropic()
+    client.messages.create(
+        model=MODEL,
+        max_tokens=100,
+        messages=[{"role": "user", "content": "hi"}],
+    )
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["provider"] == "anthropic"
 
 
 def _make_batch_requests():
