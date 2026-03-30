@@ -15,6 +15,7 @@ from braintrust.integrations import (
     ClaudeAgentSDKIntegration,
     DSPyIntegration,
     GoogleGenAIIntegration,
+    OpenRouterIntegration,
 )
 
 
@@ -41,6 +42,7 @@ def auto_instrument(
     litellm: bool = True,
     pydantic_ai: bool = True,
     google_genai: bool = True,
+    openrouter: bool = True,
     agno: bool = True,
     agentscope: bool = True,
     claude_agent_sdk: bool = True,
@@ -62,6 +64,7 @@ def auto_instrument(
         litellm: Enable LiteLLM instrumentation (default: True)
         pydantic_ai: Enable Pydantic AI instrumentation (default: True)
         google_genai: Enable Google GenAI instrumentation (default: True)
+        openrouter: Enable OpenRouter instrumentation (default: True)
         agno: Enable Agno instrumentation (default: True)
         agentscope: Enable AgentScope instrumentation (default: True)
         claude_agent_sdk: Enable Claude Agent SDK instrumentation (default: True)
@@ -124,6 +127,8 @@ def auto_instrument(
         results["pydantic_ai"] = _instrument_pydantic_ai()
     if google_genai:
         results["google_genai"] = _instrument_integration(GoogleGenAIIntegration)
+    if openrouter:
+        results["openrouter"] = _instrument_integration(OpenRouterIntegration)
     if agno:
         results["agno"] = _instrument_integration(AgnoIntegration)
     if agentscope:

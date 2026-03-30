@@ -5,6 +5,7 @@ from .anthropic import AnthropicIntegration
 from .claude_agent_sdk import ClaudeAgentSDKIntegration
 from .dspy import DSPyIntegration
 from .google_genai import GoogleGenAIIntegration
+from .openrouter import OpenRouterIntegration
 
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "ClaudeAgentSDKIntegration",
     "DSPyIntegration",
     "GoogleGenAIIntegration",
+    "OpenRouterIntegration",
 ]
