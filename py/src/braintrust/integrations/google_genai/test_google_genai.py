@@ -90,6 +90,7 @@ def vcr_config():
         "decode_compressed_response": True,
         "filter_headers": [
             "authorization",
+            "Authorization",
             "x-api-key",
             "x-goog-api-key",
         ],
