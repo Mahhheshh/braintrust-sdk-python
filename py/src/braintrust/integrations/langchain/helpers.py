@@ -1,13 +1,10 @@
-from typing import Any, Dict, List, Sequence, Union, cast
+from typing import Any, Sequence
 from unittest.mock import ANY
 
-from braintrust.logger import Span
-
-from .types import Span
 
 # Base types that can appear in values
-PrimitiveValue = Union[str, int, float, bool, None, Span]
-RecursiveValue = Union[PrimitiveValue, Dict[str, Any], Sequence[Any]]
+PrimitiveValue = str | int | float | bool | None
+RecursiveValue = PrimitiveValue | dict[str, Any] | Sequence[Any]
 
 
 def deep_hashable_dict(d: RecursiveValue):
@@ -52,35 +49,37 @@ def assert_matches_object(
                     try:
                         assert_matches_object(actual_item, expected_item)
                         matched = True
-                    except:
+                    except Exception:
                         pass
 
                 assert matched, f"Expected {expected_item} in unordered sequence but couldn't find match in {actual}"
 
     elif isinstance(expected, dict):
         assert isinstance(actual, dict), f"Expected dict but got {type(actual)}"
+        actual_dict: dict[str, Any] = actual
         for k, v in expected.items():
-            assert k in actual, f"Missing key {k}"
+            assert k in actual_dict, f"Missing key {k}"
             if v is ANY:
                 continue  # ANY matches anything
             if isinstance(v, (dict, list, tuple)):
-                assert_matches_object(cast(RecursiveValue, actual[k]), cast(RecursiveValue, v))
+                assert_matches_object(actual_dict[k], v)
             else:
-                assert actual[k] == v, f"Key {k}: expected {v} but got {actual[k]}"
+                assert actual_dict[k] == v, f"Key {k}: expected {v} but got {actual_dict[k]}"
     else:
         assert actual == expected, f"Expected {expected} but got {actual}"
 
 
-def find_spans_by_attributes(spans: List[Span], **attributes: Any) -> List[Span]:
+def find_spans_by_attributes(spans: list[Any], **attributes: Any) -> list[Any]:
     """Find all spans that match the given attributes."""
-    matching_spans: List[Span] = []
+    matching_spans: list[Any] = []
     for span in spans:
         matches = True
         if "span_attributes" not in span:
             matches = False
             continue
+        span_attrs = span.get("span_attributes") or {}
         for key, value in attributes.items():
-            if key not in span["span_attributes"] or span["span_attributes"][key] != value:
+            if key not in span_attrs or span_attrs.get(key) != value:
                 matches = False
                 break
         if matches:

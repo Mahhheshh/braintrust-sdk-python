@@ -1,8 +1,8 @@
 from contextvars import ContextVar
 
+from braintrust.integrations.langchain.callbacks import BraintrustCallbackHandler
 from langchain_core.tracers.context import register_configure_hook
 
-from braintrust_langchain.callbacks import BraintrustCallbackHandler
 
 __all__ = ["set_global_handler", "clear_global_handler"]
 
