@@ -140,6 +140,23 @@ def _run_install(install_args: list[str], packages_dir: str):
     )
 
 
+def _validate_python_archive_path(archive_path: str) -> None:
+    for component in archive_path.split(os.sep):
+        if any(ch.isspace() for ch in component):
+            raise ValueError(
+                "python bundle source path "
+                f"'{archive_path}' contains whitespace in path component '{component}'; "
+                "rename the file or directory before running `braintrust push`"
+            )
+
+
+def _validate_python_bundle_source_paths(sources: list[str], archive_root: str | None = None) -> None:
+    abs_root = os.path.abspath(archive_root or os.getcwd())
+    for source in sources:
+        archive_path = os.path.normpath(os.path.relpath(os.path.abspath(source), abs_root))
+        _validate_python_archive_path(archive_path)
+
+
 def _upload_bundle(entry_module_name: str, sources: list[str], requirements: str | None) -> str:
     _check_uv()
 
@@ -369,6 +386,7 @@ def run(args):
     needs_bundle = len(global_.functions) > 0 or len(evaluators) > 0
     bundle_id = None
     if needs_bundle:
+        _validate_python_bundle_source_paths(sources)
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
 
     if len(global_.functions) > 0:
