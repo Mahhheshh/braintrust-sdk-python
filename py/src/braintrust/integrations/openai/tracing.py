@@ -473,6 +473,7 @@ class ChatCompletionWrapper:
     def _postprocess_streaming_results(cls, all_results: list[dict[str, Any]]) -> dict[str, Any]:
         role = None
         content = None
+        refusal = None
         tool_calls: list[Any] | None = None
         finish_reason = None
         logprobs_content: list[Any] | None = None
@@ -519,6 +520,9 @@ class ChatCompletionWrapper:
             if delta.get("content") is not None:
                 content = (content or "") + delta.get("content")
 
+            if delta.get("refusal") is not None:
+                refusal = (refusal or "") + delta.get("refusal")
+
             if delta.get("tool_calls") is not None:
                 delta_tool_calls = delta.get("tool_calls")
                 if not delta_tool_calls:
@@ -556,6 +560,7 @@ class ChatCompletionWrapper:
                         "role": role,
                         "content": content,
                         "tool_calls": tool_calls,
+                        **({"refusal": refusal} if refusal is not None else {}),
                     },
                     "logprobs": (
                         {
