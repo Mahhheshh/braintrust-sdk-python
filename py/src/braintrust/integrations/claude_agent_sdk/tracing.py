@@ -586,6 +586,7 @@ class ContextTracker:
 
         self._final_results: list[dict[str, Any]] = []
         self._result_output: Any | None = None
+        self._is_error: bool = False
         self._task_events: list[dict[str, Any]] = []
 
         _thread_local.tool_span_tracker = self._tool_tracker
@@ -622,6 +623,12 @@ class ContextTracker:
         """Flush accumulated task events to the root span metadata."""
         if self._task_events:
             self._root_span.log(metadata={"task_events": self._task_events})
+
+    def log_error(self) -> None:
+        """Log error to the root span"""
+        if self._is_error:
+            error_msg = str(self._result_output) if self._result_output is not None else "Unknown error"
+            self._root_span.log(error=error_msg)
 
     def cleanup(self) -> None:
         """End all open LLM spans, TASK spans, and TOOL spans; clear thread-local."""
@@ -691,6 +698,9 @@ class ContextTracker:
         final_content, extended = self._start_or_merge_llm_span(message, parent_export, ctx)
 
         llm_export = ctx.llm_span.export() if ctx.llm_span else None
+        error_field = getattr(message, "error", None)
+        if error_field is not None and ctx.llm_span is not None:
+            ctx.llm_span.log(error=type(error_field).__name__)
         self._tool_tracker.start_tool_spans(message, llm_export)
 
         self._register_pending_agent_contexts(message)
@@ -720,7 +730,9 @@ class ContextTracker:
             ctx = self._get_context(None)
             if ctx.llm_span and (usage_metrics or usage_metadata):
                 ctx.llm_span.log(metrics=usage_metrics or None, metadata=usage_metadata or None)
-
+        error_field = getattr(message, "is_error", False)
+        if error_field:
+            self._is_error = True
         result_value = getattr(message, "result", None)
         if result_value is not None:
             self._result_output = result_value
@@ -934,7 +946,7 @@ class RequestTracker:
     def finish(self, *, log_output: bool = False) -> None:
         if self._finished:
             return
-
+        self._context_tracker.log_error()
         if log_output:
             self._context_tracker.log_output()
         self._context_tracker.log_tasks()
