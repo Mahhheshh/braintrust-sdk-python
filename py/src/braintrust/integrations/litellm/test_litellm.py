@@ -1,5 +1,7 @@
 import asyncio
 import time
+from os import environ
+from unittest.mock import patch
 
 import litellm
 import pytest
@@ -14,6 +16,7 @@ PROJECT_NAME = "test-project-litellm-py-tracing"
 TEST_MODEL = "gpt-4o-mini"  # cheapest model for tests
 TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
+TEST_COHERE_KEY = "TEST_COHERE_KEY"
 
 
 @pytest.fixture(autouse=True)
@@ -542,6 +545,65 @@ async def test_litellm_async_streaming_with_break(memory_logger):
     span = spans[0]
     metrics = span["metrics"]
     assert metrics["time_to_first_token"] >= 0
+
+
+@pytest.mark.vcr
+def test_patch_litellm_rerank(memory_logger):
+    """Test for litellm rerank"""
+    assert not memory_logger.pop()
+
+    query = "What is the capital of the United States?"
+    documents = [
+        "Carson City is the capital city of the American state of Nevada.",
+        "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan.",
+        "Washington, D.C. is the capital of the United States.",
+        "Capital punishment has existed in the United States since before it was a country.",
+    ]
+
+    with patch.dict(environ, {"COHERE_API_KEY": TEST_COHERE_KEY}):
+        response = litellm.rerank(
+            model="cohere/rerank-english-v3.0",
+            query=query,
+            documents=documents,
+            top_n=3,
+        )
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert span["input"] == query
+    assert span["output"] == response.results
+
+
+@pytest.mark.vcr
+@pytest.mark.asyncio
+async def test_patch_litellm_arerank(memory_logger):
+    """Test for litellm arerank"""
+    assert not memory_logger.pop()
+
+    query = "What is the capital of the United States?"
+    documents = [
+        "Carson City is the capital city of the American state of Nevada.",
+        "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan.",
+        "Washington, D.C. is the capital of the United States.",
+        "Capital punishment has existed in the United States since before it was a country.",
+    ]
+
+    with patch.dict(environ, {"COHERE_API_KEY": TEST_COHERE_KEY}):
+        response = await litellm.arerank(
+            model="cohere/rerank-english-v3.0",
+            query=query,
+            documents=documents,
+            top_n=3,
+        )
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert span["input"] == query
+    assert span["output"] == response.results
 
 
 def test_patch_litellm_responses():

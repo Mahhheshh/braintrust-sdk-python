@@ -7,10 +7,12 @@ from braintrust.integrations.base import FunctionWrapperPatcher
 from .tracing import (
     _acompletion_wrapper_async,
     _aembedding_wrapper_async,
+    _arerank_wrapper,
     _aresponses_wrapper_async,
     _completion_wrapper,
     _embedding_wrapper,
     _moderation_wrapper,
+    _rerank_wrapper,
     _responses_wrapper,
 )
 
@@ -62,6 +64,18 @@ class LiteLLMModerationPatcher(FunctionWrapperPatcher):
     wrapper = _moderation_wrapper
 
 
+class LiteLLMRerankPatcher(FunctionWrapperPatcher):
+    name = "litellm.rerank"
+    target_path = "rerank"
+    wrapper = _rerank_wrapper
+
+
+class LiteLLMARerankPatcher(FunctionWrapperPatcher):
+    name = "litellm.arerank"
+    target_path = "arerank"
+    wrapper = _arerank_wrapper
+
+
 # ---------------------------------------------------------------------------
 # All patchers, in declaration order
 # ---------------------------------------------------------------------------
@@ -74,6 +88,8 @@ _ALL_LITELLM_PATCHERS = (
     LiteLLMEmbeddingPatcher,
     LiteLLMAembeddingPatcher,
     LiteLLMModerationPatcher,
+    LiteLLMARerankPatcher,
+    LiteLLMRerankPatcher,
 )
 
 

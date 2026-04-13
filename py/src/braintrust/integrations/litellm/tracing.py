@@ -330,6 +330,36 @@ def _moderation_wrapper(wrapped, instance, args, kwargs):
         return moderation_response
 
 
+def _rerank_wrapper(wrapped, instance, args, kwargs):
+    """wrapt wrapper for litellm.rerank."""
+    updated_span_payload = _update_span_payload_from_params(kwargs, input_key="query")
+
+    with start_span(
+        **merge_dicts(dict(name="Rerank", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload)
+    ) as span:
+        rerank_response = wrapped(*args, **kwargs)
+        log_response = _try_to_dict(rerank_response)
+        span.log(
+            output=log_response["results"],
+        )
+        return rerank_response
+
+
+async def _arerank_wrapper(wrapped, instance, args, kwargs):
+    """wrapt wrapper for litellm.arerank."""
+    updated_span_payload = _update_span_payload_from_params(kwargs, input_key="query")
+
+    with start_span(
+        **merge_dicts(dict(name="ARerank", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload)
+    ) as span:
+        arerank_response = await wrapped(*args, **kwargs)
+        log_response = _try_to_dict(arerank_response)
+        span.log(
+            output=log_response["results"],
+        )
+        return arerank_response
+
+
 # ---------------------------------------------------------------------------
 # Streaming post-processing
 # ---------------------------------------------------------------------------
