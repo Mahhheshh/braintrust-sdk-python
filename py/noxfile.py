@@ -83,93 +83,84 @@ VENDOR_PACKAGES = (
     "temporalio",
 )
 
-# Test matrix
-ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+ANTHROPIC_VERSIONS = (LATEST, "0.48.0")
+
+
+@nox.session()
+@nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
+def test_anthropic(session, version):
+    _install_test_deps(session)
+    _install(session, "anthropic", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/anthropic/test_anthropic.py", version=version)
+
+
+OPENAI_VERSIONS = (LATEST, "1.92.0", "1.77.0", "1.71.0")
+
+
+@nox.session()
+@nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
+def test_openai(session, version):
+    _install_test_deps(session)
+    _install(session, "openai", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_oai_attachments.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai_openrouter_gateway.py", version=version)
+
+
+@nox.session()
+@nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
+def test_openai_http2_streaming(session, version):
+    _install_test_deps(session)
+    _install(session, "openai", version)
+    # h2 is isolated to this session because it's only needed to force the
+    # HTTP/2 LegacyAPIResponse streaming path used by the regression test.
+    session.install("h2")
+    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai_http2.py", version=version)
+
+
 OPENAI_AGENTS_VERSIONS = (LATEST, "0.0.19")
-# litellm latest requires Python >= 3.10
+
+
+@nox.session()
+@nox.parametrize("version", OPENAI_AGENTS_VERSIONS, ids=OPENAI_AGENTS_VERSIONS)
+def test_openai_agents(session, version):
+    _install_test_deps(session)
+    _install(session, "openai")
+    _install(session, "openai-agents", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/openai_agents/test_openai_agents.py", version=version)
+
+
 # Pin litellm to a version without the 1.82.7-1.82.8 compromise and with the
 # OIDC userinfo cache key collision fix from 1.83.0+
 LITELLM_VERSIONS = ("1.83.0", "1.74.0")
+
+
+@nox.session()
+@nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
+def test_litellm(session, version):
+    _install_test_deps(session)
+    # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
+    # https://github.com/BerriAI/litellm/issues/13711
+    # Install fastapi and orjson as they're required by litellm for proxy/responses operations
+    session.install("openai<=1.99.9", "--force-reinstall", "fastapi", "orjson")
+    _install(session, "litellm", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/litellm/test_litellm.py", version=version)
+
+
 # CLI bundling started in 0.1.10 - older versions require external Claude Code installation
 CLAUDE_AGENT_SDK_VERSIONS = (LATEST, "0.1.10")
-# Keep LATEST for newest API coverage, and pin 2.4.0 to cover the 2.4 -> 2.5 breaking change
-# to internals we leverage for instrumentation.
-AGNO_VERSIONS = (LATEST, "2.4.0", "2.1.0")
-AGENTSCOPE_VERSIONS = (LATEST, "1.0.0")
-# pydantic_ai 1.x requires Python >= 3.10
-# Two test suites with different version requirements:
-# 1. wrap_openai approach: works with older versions (0.1.9+)
-# 2. Direct wrapper (setup_pydantic_ai): requires 1.10.0+ for all features
-PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
-PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
-
-AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
-# google-genai 1.29.0 has a broken async streaming path unless aiohttp is installed.
-# 1.30.0 is the earliest version that passes our standard integration test session.
-GENAI_VERSIONS = (LATEST, "1.30.0")
-# dspy 2.6.0 is the earliest version that matches the callback/settings APIs our
-# integration and tests rely on.
-DSPY_VERSIONS = (LATEST, "2.6.0")
-GOOGLE_ADK_VERSIONS = (LATEST, "1.14.1")
-LANGCHAIN_VERSIONS = (LATEST, "0.3.28")
-OPENROUTER_VERSIONS = (LATEST, "0.6.0")
-MISTRAL_VERSIONS = (LATEST, "1.12.4")
-# temporalio 1.19.0+ requires Python >= 3.10; skip Python 3.9 entirely
-TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
-PYTEST_VERSIONS = (LATEST, "8.4.2")
-
-
-@nox.session()
-def test_core(session):
-    _install_test_deps(session)
-    # verify we haven't installed our 3p deps.
-    for p in VENDOR_PACKAGES:
-        session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
-    _run_core_tests(session)
-
-
-@nox.session()
-@nox.parametrize("version", PYDANTIC_AI_WRAP_OPENAI_VERSIONS, ids=PYDANTIC_AI_WRAP_OPENAI_VERSIONS)
-def test_pydantic_ai_wrap_openai(session, version):
-    """Test pydantic_ai with wrap_openai() approach - supports older versions."""
-    _install_test_deps(session)
-    _install(session, "pydantic_ai", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_wrap_openai.py")
-
-
-@nox.session()
-@nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
-def test_pydantic_ai_integration(session, version):
-    """Test pydantic_ai with setup_pydantic_ai() wrapper - requires 1.10.0+."""
-    # Skip on Python 3.9 - pydantic_ai 1.10.0+ requires Python 3.10+
-    if sys.version_info < (3, 10):
-        session.skip("pydantic_ai integration tests require Python >= 3.10 (pydantic_ai 1.10.0+)")
-    _install_test_deps(session)
-    _install(session, "pydantic_ai", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_integration.py")
-
-
-@nox.session()
-def test_pydantic_ai_logfire(session):
-    """Test pydantic_ai + logfire coexistence (issue #1324)."""
-    if sys.version_info < (3, 10):
-        session.skip("pydantic_ai + logfire tests require Python >= 3.10")
-    _install_test_deps(session)
-    _install(session, "pydantic_ai")
-    _install(session, "logfire")
-    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_logfire.py")
 
 
 @nox.session()
 @nox.parametrize("version", CLAUDE_AGENT_SDK_VERSIONS, ids=CLAUDE_AGENT_SDK_VERSIONS)
 def test_claude_agent_sdk(session, version):
-    # claude_agent_sdk requires Python >= 3.10
-    # These tests use subprocess-transport cassettes, so they can replay in CI
-    # while still exercising the real Claude Agent SDK control protocol.
     _install_test_deps(session)
     _install(session, "claude_agent_sdk", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/claude_agent_sdk/test_claude_agent_sdk.py")
+    _run_tests(session, f"{INTEGRATION_DIR}/claude_agent_sdk/test_claude_agent_sdk.py", version=version)
+
+
+# Pin 2.4.0 to cover the 2.4 -> 2.5 breaking change to internals we leverage for instrumentation.
+AGNO_VERSIONS = (LATEST, "2.4.0", "2.1.0")
 
 
 @nox.session()
@@ -179,8 +170,11 @@ def test_agno(session, version):
     _install(session, "agno", version)
     _install(session, "openai")  # Required for agno.models.openai
     _install(session, "fastapi")  # Required for agno.workflow
-    _run_tests(session, f"{INTEGRATION_DIR}/agno/test_agno.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/agno/test_workflow.py")
+    _run_tests(session, f"{INTEGRATION_DIR}/agno/test_agno.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/agno/test_workflow.py", version=version)
+
+
+AGENTSCOPE_VERSIONS = (LATEST, "1.0.0")
 
 
 @nox.session()
@@ -189,125 +183,44 @@ def test_agentscope(session, version):
     _install_test_deps(session)
     _install(session, "agentscope", version)
     _install(session, "openai")
-    _run_tests(session, f"{INTEGRATION_DIR}/agentscope/test_agentscope.py")
+    _run_tests(session, f"{INTEGRATION_DIR}/agentscope/test_agentscope.py", version=version)
+
+
+# Two test suites with different version requirements:
+# 1. wrap_openai approach: works with older versions (0.1.9+)
+# 2. Direct wrapper (setup_pydantic_ai): requires 1.10.0+ for all features
+PYDANTIC_AI_INTEGRATION_VERSIONS = (LATEST, "1.10.0")
+PYDANTIC_AI_WRAP_OPENAI_VERSIONS = (LATEST, "1.0.1", "0.1.9")
 
 
 @nox.session()
-@nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
-def test_anthropic(session, version):
+@nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
+def test_pydantic_ai_integration(session, version):
     _install_test_deps(session)
-    _install(session, "anthropic", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/anthropic/test_anthropic.py")
+    _install(session, "pydantic_ai", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_integration.py", version=version)
 
 
 @nox.session()
-@nox.parametrize("version", GENAI_VERSIONS, ids=GENAI_VERSIONS)
-def test_google_genai(session, version):
+@nox.parametrize("version", PYDANTIC_AI_INTEGRATION_VERSIONS, ids=PYDANTIC_AI_INTEGRATION_VERSIONS)
+def test_pydantic_ai_logfire(session, version):
+    """Test pydantic_ai + logfire coexistence (issue #1324)."""
     _install_test_deps(session)
-    _install(session, "google-genai", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/google_genai/test_google_genai.py")
+    _install(session, "pydantic_ai", version)
+    _install(session, "logfire")
+    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_logfire.py", version=version)
 
 
 @nox.session()
-@nox.parametrize("version", GOOGLE_ADK_VERSIONS, ids=GOOGLE_ADK_VERSIONS)
-def test_google_adk(session, version):
-    """Test Google ADK integration."""
+@nox.parametrize("version", PYDANTIC_AI_WRAP_OPENAI_VERSIONS, ids=PYDANTIC_AI_WRAP_OPENAI_VERSIONS)
+def test_pydantic_ai_wrap_openai(session, version):
+    """Test pydantic_ai with wrap_openai() approach - supports older versions."""
     _install_test_deps(session)
-    _install(session, "google-adk", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/adk/test_adk.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/adk/test_adk_mcp_tool.py")
+    _install(session, "pydantic_ai", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/pydantic_ai/test_pydantic_ai_wrap_openai.py", version=version)
 
 
-@nox.session()
-@nox.parametrize("version", LANGCHAIN_VERSIONS, ids=LANGCHAIN_VERSIONS)
-def test_langchain(session, version):
-    """Test LangChain integration."""
-    # langchain requires Python >= 3.10
-    if sys.version_info < (3, 10):
-        session.skip("langchain requires Python >= 3.10")
-    _install_test_deps(session)
-    _install(session, "langchain-core", version)
-    _install(session, "langchain-openai")
-    _install(session, "langchain-anthropic")
-    _install(session, "langgraph")
-    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_callbacks.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_context.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_anthropic.py")
-
-
-@nox.session()
-@nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
-def test_openai(session, version):
-    _install_test_deps(session)
-    _install(session, "openai", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_oai_attachments.py")
-    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai_openrouter_gateway.py")
-
-
-@nox.session()
-@nox.parametrize("version", OPENAI_AGENTS_VERSIONS, ids=OPENAI_AGENTS_VERSIONS)
-def test_openai_agents(session, version):
-    if sys.version_info < (3, 10):
-        session.skip("openai-agents requires Python >= 3.10")
-    _install_test_deps(session)
-    _install(session, "openai")
-    _install(session, "openai-agents", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/openai_agents/test_openai_agents.py")
-
-
-@nox.session()
-def test_openai_http2_streaming(session):
-    _install_test_deps(session)
-    _install(session, "openai")
-    # h2 is isolated to this session because it's only needed to force the
-    # HTTP/2 LegacyAPIResponse streaming path used by the regression test.
-    session.install("h2")
-    _run_tests(session, f"{INTEGRATION_DIR}/openai/test_openai_http2.py")
-
-
-@nox.session()
-@nox.parametrize("version", OPENROUTER_VERSIONS, ids=OPENROUTER_VERSIONS)
-def test_openrouter(session, version):
-    """Test the native OpenRouter SDK integration."""
-    _install_test_deps(session)
-    _install(session, "openrouter", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/openrouter/test_openrouter.py")
-
-
-@nox.session()
-@nox.parametrize("version", MISTRAL_VERSIONS, ids=MISTRAL_VERSIONS)
-def test_mistral(session, version):
-    """Test the native Mistral SDK integration."""
-    _install_test_deps(session)
-    _install(session, "mistralai", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/mistral/test_mistral.py")
-
-
-@nox.session()
-@nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
-def test_litellm(session, version):
-    # litellm latest requires Python >= 3.10
-    if version == LATEST and sys.version_info < (3, 10):
-        session.skip("litellm latest requires Python >= 3.10")
-    _install_test_deps(session)
-    # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
-    # https://github.com/BerriAI/litellm/issues/13711
-    # Install fastapi and orjson as they're required by litellm for proxy/responses operations
-    session.install("openai<=1.99.9", "--force-reinstall", "fastapi", "orjson")
-    _install(session, "litellm", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/litellm/test_litellm.py")
-
-
-@nox.session()
-@nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
-def test_dspy(session, version):
-    # dspy latest depends on litellm which requires Python >= 3.10
-    if sys.version_info < (3, 10):
-        session.skip("dspy latest requires Python >= 3.10 (litellm dependency)")
-    _install_test_deps(session)
-    _install(session, "dspy", version)
-    _run_tests(session, f"{INTEGRATION_DIR}/dspy/test_dspy.py")
+AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
 @nox.session()
@@ -318,6 +231,113 @@ def test_autoevals(session, version):
     # we need some tests with it installed.
     _install_test_deps(session)
     _install(session, "autoevals", version)
+    _run_core_tests(session)
+
+
+# google-genai 1.29.0 has a broken async streaming path unless aiohttp is installed.
+# 1.30.0 is the earliest version that passes our standard integration test session.
+GENAI_VERSIONS = (LATEST, "1.30.0")
+
+
+@nox.session()
+@nox.parametrize("version", GENAI_VERSIONS, ids=GENAI_VERSIONS)
+def test_google_genai(session, version):
+    _install_test_deps(session)
+    _install(session, "google-genai", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/google_genai/test_google_genai.py", version=version)
+
+
+DSPY_VERSIONS = (LATEST, "2.6.0")
+
+
+@nox.session()
+@nox.parametrize("version", DSPY_VERSIONS, ids=DSPY_VERSIONS)
+def test_dspy(session, version):
+    _install_test_deps(session)
+    _install(session, "dspy", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/dspy/test_dspy.py", version=version)
+
+
+GOOGLE_ADK_VERSIONS = (LATEST, "1.14.1")
+
+
+@nox.session()
+@nox.parametrize("version", GOOGLE_ADK_VERSIONS, ids=GOOGLE_ADK_VERSIONS)
+def test_google_adk(session, version):
+    _install_test_deps(session)
+    _install(session, "google-adk", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/adk/test_adk.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/adk/test_adk_mcp_tool.py", version=version)
+
+
+LANGCHAIN_VERSIONS = (LATEST, "0.3.28")
+
+
+@nox.session()
+@nox.parametrize("version", LANGCHAIN_VERSIONS, ids=LANGCHAIN_VERSIONS)
+def test_langchain(session, version):
+    _install_test_deps(session)
+    _install(session, "langchain-core", version)
+    _install(session, "langchain-openai")
+    _install(session, "langchain-anthropic")
+    _install(session, "langgraph")
+    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_callbacks.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_context.py", version=version)
+    _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_anthropic.py", version=version)
+
+
+OPENROUTER_VERSIONS = (LATEST, "0.6.0")
+
+
+@nox.session()
+@nox.parametrize("version", OPENROUTER_VERSIONS, ids=OPENROUTER_VERSIONS)
+def test_openrouter(session, version):
+    """Test the native OpenRouter SDK integration."""
+    _install_test_deps(session)
+    _install(session, "openrouter", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/openrouter/test_openrouter.py", version=version)
+
+
+MISTRAL_VERSIONS = (LATEST, "1.12.4")
+
+
+@nox.session()
+@nox.parametrize("version", MISTRAL_VERSIONS, ids=MISTRAL_VERSIONS)
+def test_mistral(session, version):
+    """Test the native Mistral SDK integration."""
+    _install_test_deps(session)
+    _install(session, "mistralai", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/mistral/test_mistral.py", version=version)
+
+
+TEMPORAL_VERSIONS = (LATEST, "1.20.0", "1.19.0")
+
+
+@nox.session()
+@nox.parametrize("version", TEMPORAL_VERSIONS, ids=TEMPORAL_VERSIONS)
+def test_temporal(session, version):
+    _install_test_deps(session)
+    _install(session, "temporalio", version)
+    _run_tests(session, "braintrust/contrib/temporal")
+
+
+PYTEST_VERSIONS = (LATEST, "8.4.2")
+
+
+@nox.session()
+@nox.parametrize("version", PYTEST_VERSIONS, ids=PYTEST_VERSIONS)
+def test_pytest_plugin(session, version):
+    _install_test_deps(session)
+    _install(session, "pytest", version)
+    _run_tests(session, f"{WRAPPER_DIR}/pytest_plugin/test_plugin.py")
+
+
+@nox.session()
+def test_core(session):
+    _install_test_deps(session)
+    # verify we haven't installed our 3p deps.
+    for p in VENDOR_PACKAGES:
+        session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
     _run_core_tests(session)
 
 
@@ -341,31 +361,11 @@ def test_cli(session):
 
 
 @nox.session()
-@nox.parametrize("version", PYTEST_VERSIONS, ids=PYTEST_VERSIONS)
-def test_pytest_plugin(session, version):
-    _install_test_deps(session)
-    _install(session, "pytest", version)
-    _run_tests(session, f"{WRAPPER_DIR}/pytest_plugin/test_plugin.py")
-
-
-@nox.session()
 def test_otel(session):
     """Test OtelExporter with OpenTelemetry installed."""
     _install_test_deps(session)
     session.install(".[otel]")
     _run_tests(session, "braintrust/test_otel.py")
-
-
-@nox.session()
-@nox.parametrize("version", TEMPORAL_VERSIONS, ids=TEMPORAL_VERSIONS)
-def test_temporal(session, version):
-    """Test Temporal integration with temporalio installed."""
-    # temporalio 1.19.0+ requires Python >= 3.10
-    if sys.version_info < (3, 10):
-        session.skip("temporalio 1.19.0+ requires Python >= 3.10")
-    _install_test_deps(session)
-    _install(session, "temporalio", version)
-    _run_tests(session, "braintrust/contrib/temporal")
 
 
 @nox.session()
@@ -422,37 +422,6 @@ def pylint(session):
     if _PINNED_PYTHON and sys.version_info[:2] < _PINNED_PYTHON:
         files = [f for f in files if not f.startswith("scripts/")]
     session.run("pylint", "--errors-only", *files)
-
-
-@nox.session()
-def test_latest_wrappers_novcr(session):
-    """Run the latest wrapper tests without vcrpy."""
-    if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
-        session.skip("Skipping novcr tests in CI (no real API keys available)")
-    # every test run we hit openai, anthropic,  at least once so we balance CI speed (with vcrpy)
-    # with testing reality.
-    args = session.posargs.copy()
-    if "--disable-vcr" not in args:
-        args.append("--disable-vcr")
-    session.notify("test_openai(latest)", posargs=args)
-    session.notify("test_anthropic(latest)", posargs=args)
-    session.notify("test_pydantic_ai_wrap_openai(latest)", posargs=args)
-    session.notify("test_pydantic_ai_integration(latest)", posargs=args)
-    session.notify("test_claude_agent_sdk(latest)", posargs=args)
-
-
-def _install_npm_in_session(session):
-    """Install Node.js and npm in the nox session using nodeenv."""
-    session.install("nodeenv", silent=SILENT_INSTALLS)
-    # Create a node environment in the session's temporary directory
-    node_dir = os.path.join(session.create_tmp(), "node_env")
-    session.run("nodeenv", node_dir, silent=SILENT_INSTALLS)
-    # Return the path to npm binary for direct use
-    if sys.platform == "win32":
-        npm_bin = os.path.join(node_dir, "Scripts", "npm.cmd")
-    else:
-        npm_bin = os.path.join(node_dir, "bin", "npm")
-    return npm_bin
 
 
 def _install_test_deps(session):
@@ -515,9 +484,11 @@ def _run_core_tests(session):
     )
 
 
-def _run_tests(session, test_path, ignore_path="", ignore_paths=None, env=None):
+def _run_tests(session, test_path, ignore_path="", ignore_paths=None, env=None, version=None):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
     env = env.copy() if env else {}
+    if version:
+        env["BRAINTRUST_TEST_PACKAGE_VERSION"] = version
     wheel_flag = "--wheel" in session.posargs
     common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     pytest_posargs = [arg for arg in session.posargs if arg not in INTERNAL_TEST_FLAGS]
