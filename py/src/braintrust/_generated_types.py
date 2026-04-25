@@ -617,43 +617,6 @@ class EnvVar(TypedDict):
     """
 
 
-class EvalStatusPageConfig(TypedDict):
-    score_columns: NotRequired[Sequence[str] | None]
-    """
-    The score columns to display on the page
-    """
-    metric_columns: NotRequired[Sequence[str] | None]
-    """
-    The metric columns to display on the page
-    """
-    grouping_field: NotRequired[str | None]
-    """
-    The metadata field to use for grouping experiments (model)
-    """
-    filter: NotRequired[str | None]
-    """
-    BTQL filter to apply to experiment data
-    """
-    sort_by: NotRequired[str | None]
-    """
-    Field to sort results by (format: 'score:<name>' or 'metric:<name>')
-    """
-    sort_order: NotRequired[Literal['asc', 'desc'] | None]
-    """
-    Sort order (ascending or descending)
-    """
-    api_key: NotRequired[str | None]
-    """
-    The API key used for fetching experiment data
-    """
-
-
-EvalStatusPageTheme: TypeAlias = Literal['light', 'dark']
-"""
-The theme for the page
-"""
-
-
 class ExperimentInternalMetadata(TypedDict):
     dataset_filter: NotRequired[Mapping[str, Any] | None]
     """
@@ -2883,43 +2846,6 @@ class DatasetEvent(TypedDict):
     """
     Classifications for this event (dictionary from classification name to items)
     """
-
-
-class EvalStatusPage(TypedDict):
-    id: str
-    """
-    Unique identifier for the eval status page
-    """
-    project_id: str
-    """
-    Unique identifier for the project that the eval status page belongs under
-    """
-    user_id: NotRequired[str | None]
-    """
-    Identifies the user who created the eval status page
-    """
-    created: NotRequired[str | None]
-    """
-    Date of eval status page creation
-    """
-    deleted_at: NotRequired[str | None]
-    """
-    Date of eval status page deletion, or null if the eval status page is still active
-    """
-    name: str
-    """
-    Name of the eval status page
-    """
-    description: NotRequired[str | None]
-    """
-    Textual description of the eval status page
-    """
-    logo_url: NotRequired[str | None]
-    """
-    URL of the logo to display on the page
-    """
-    theme: EvalStatusPageTheme
-    config: EvalStatusPageConfig
 
 
 class Experiment(TypedDict):
