@@ -157,6 +157,10 @@ test-crewai = [
     "litellm==1.83.10",
 ]
 
+test-llamaindex = [
+    {include-group = "test"},
+]
+
 test-cli = [
     {include-group = "test"},
     "httpx==0.28.1",
@@ -208,6 +212,9 @@ lint = [
     "langchain-core",
     "langchain-openai",
     "langchain-anthropic",
+    "llama-index-core",
+    "llama-index-llms-openai",
+    "llama-index-embeddings-openai",
 ]
 
 # -- Build deps ----------------------------------------------------------------
@@ -351,6 +358,10 @@ latest = "google-adk==1.31.1"
 latest = "langchain-core==1.3.1"
 "0.3.28" = "langchain-core==0.3.28"
 
+[tool.braintrust.matrix.llama-index-core]
+latest = "llama-index-core==0.14.21"
+"0.13.0" = "llama-index-core==0.13.0"
+
 [tool.braintrust.matrix.openrouter]
 latest = "openrouter==0.9.1"
 "0.6.0" = "openrouter==0.6.0"
@@ -401,6 +412,7 @@ dspy = ["dspy"]
 google_genai = ["google-genai"]
 langchain = ["langchain-core"]
 litellm = ["litellm"]
+llamaindex = ["llama-index-core"]
 mistral = ["mistralai"]
 openai = ["openai"]
 openai_agents = ["openai-agents"]

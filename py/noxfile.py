@@ -397,6 +397,21 @@ def test_langchain(session, version):
     _run_tests(session, f"{INTEGRATION_DIR}/langchain/test_anthropic.py", version=version)
 
 
+LLAMAINDEX_VERSIONS = _get_matrix_versions("llama-index-core")
+
+
+@nox.session()
+@nox.parametrize("version", LLAMAINDEX_VERSIONS, ids=LLAMAINDEX_VERSIONS)
+def test_llamaindex(session, version):
+    _install_test_deps(session)
+    _install_group_locked(session, "test-llamaindex")
+    _install_matrix_dep(session, "llama-index-core", version)
+    # These packages are tightly version-coupled to llama-index-core, so we
+    # install them unpinned and let pip resolve compatible versions.
+    session.install("llama-index-llms-openai", "llama-index-embeddings-openai", silent=SILENT_INSTALLS)
+    _run_tests(session, f"{INTEGRATION_DIR}/llamaindex/test_llamaindex.py", version=version)
+
+
 OPENROUTER_VERSIONS = _get_matrix_versions("openrouter")
 
 
