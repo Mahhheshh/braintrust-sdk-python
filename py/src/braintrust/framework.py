@@ -17,13 +17,13 @@ from typing import (
     Any,
     Generic,
     Literal,
+    Protocol,
+    TypedDict,
     TypeVar,
-    Union,
 )
 
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-from typing_extensions import Protocol, TypedDict
 
 from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
@@ -216,13 +216,8 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output, Expected]):
     metadata: Metadata | None = None
 
 
-OneOrMoreScores = Union[float, int, bool, None, Score, list[Score]]
-OneOrMoreClassifications = Union[
-    None,
-    Classification,
-    Mapping[str, Any],
-    list[Classification | Mapping[str, Any]],
-]
+OneOrMoreScores = float | int | bool | None | Score | list[Score]
+OneOrMoreClassifications = None | Classification | Mapping[str, Any] | list[Classification | Mapping[str, Any]]
 
 
 # Synchronous scorer interface - implements callable
@@ -247,20 +242,19 @@ class AsyncScorerLike(Protocol, Generic[Input, Output, Expected]):
     async def eval_async(self, output: Output, expected: Expected | None = None, **kwargs: Any) -> OneOrMoreScores: ...
 
 
-# Union type for any kind of scorer (for typing)
-ScorerLike = Union[SyncScorerLike[Input, Output, Expected], AsyncScorerLike[Input, Output, Expected]]
+ScorerLike = SyncScorerLike[Input, Output, Expected] | AsyncScorerLike[Input, Output, Expected]
 
-EvalScorer = Union[
-    ScorerLike[Input, Output, Expected],
-    type[ScorerLike[Input, Output, Expected]],
-    Callable[[Input, Output, Expected], OneOrMoreScores],
-    Callable[[Input, Output, Expected], Awaitable[OneOrMoreScores]],
-]
+EvalScorer = (
+    ScorerLike[Input, Output, Expected]
+    | type[ScorerLike[Input, Output, Expected]]
+    | Callable[[Input, Output, Expected], OneOrMoreScores]
+    | Callable[[Input, Output, Expected], Awaitable[OneOrMoreScores]]
+)
 
-EvalClassifier = Union[
-    Callable[[Input, Output, Expected], OneOrMoreClassifications],
-    Callable[[Input, Output, Expected], Awaitable[OneOrMoreClassifications]],
-]
+EvalClassifier = (
+    Callable[[Input, Output, Expected], OneOrMoreClassifications]
+    | Callable[[Input, Output, Expected], Awaitable[OneOrMoreClassifications]]
+)
 
 
 @dataclasses.dataclass
@@ -278,27 +272,23 @@ class BaseExperiment:
     """
 
 
-_AnyEvalCase = Union[
-    EvalCase[Input, Expected],
-    EvalCaseDict[Input, Expected],
-    EvalCaseDictNoOutput[Input],
-    ExperimentDatasetEvent,
-]
+_AnyEvalCase = (
+    EvalCase[Input, Expected] | EvalCaseDict[Input, Expected] | EvalCaseDictNoOutput[Input] | ExperimentDatasetEvent
+)
 
-_EvalDataObject = Union[
-    Iterable[_AnyEvalCase[Input, Expected]],
-    Iterator[_AnyEvalCase[Input, Expected]],
-    Awaitable[Iterator[_AnyEvalCase[Input, Expected]]],
-    Callable[[], Union[Iterator[_AnyEvalCase[Input, Expected]], Awaitable[Iterator[_AnyEvalCase[Input, Expected]]]]],
-    BaseExperiment,
-]
+_EvalDataObject = (
+    Iterable[_AnyEvalCase[Input, Expected]]
+    | Iterator[_AnyEvalCase[Input, Expected]]
+    | Awaitable[Iterator[_AnyEvalCase[Input, Expected]]]
+    | Callable[[], Iterator[_AnyEvalCase[Input, Expected]] | Awaitable[Iterator[_AnyEvalCase[Input, Expected]]]]
+    | BaseExperiment
+)
 
-EvalData = Union[_EvalDataObject[Input, Expected], type[_EvalDataObject[Input, Expected]], Dataset]
+EvalData = _EvalDataObject[Input, Expected] | type[_EvalDataObject[Input, Expected]] | Dataset
 
-EvalTask = Union[
-    Callable[[Input], Union[Output, Awaitable[Output]]],
-    Callable[[Input, EvalHooks[Expected]], Union[Output, Awaitable[Output]]],
-]
+EvalTask = (
+    Callable[[Input], Output | Awaitable[Output]] | Callable[[Input, EvalHooks[Expected]], Output | Awaitable[Output]]
+)
 
 ErrorScoreHandler = Callable[[Span, EvalCase[Input, Expected], Sequence[str]], dict[str, float] | None]
 
