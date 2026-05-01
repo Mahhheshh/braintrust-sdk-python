@@ -1,6 +1,7 @@
 """Unit tests for Braintrust Temporal interceptor."""
 
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -243,8 +244,22 @@ class TestAutoInstrumentation:
 
 @pytest_asyncio.fixture(scope="function")
 async def temporal_env():
-    """Create a Temporal test environment."""
-    async with await temporalio.testing.WorkflowEnvironment.start_time_skipping() as env:
+    """Create a Temporal test environment.
+
+    If ``BRAINTRUST_TEMPORAL_TEST_SERVER_DIR`` is set, point the SDK's binary
+    download cache at that directory and pin a long TTL so existing binaries
+    are reused. CI sets this so a cached directory restored from the GitHub
+    Actions cache shortcuts the download to temporal.download (which rate
+    limits CI runners). When the var is unset (the local default), the SDK
+    falls back to its built-in temp-dir download behavior.
+    """
+    kwargs: dict[str, Any] = {}
+    cache_dir = os.environ.get("BRAINTRUST_TEMPORAL_TEST_SERVER_DIR")
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+        kwargs["download_dest_dir"] = cache_dir
+        kwargs["test_server_download_ttl"] = timedelta(days=365)
+    async with await temporalio.testing.WorkflowEnvironment.start_time_skipping(**kwargs) as env:
         yield env
 
 
