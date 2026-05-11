@@ -210,7 +210,7 @@ lint = [
     "dspy",
     "google-adk",
     "google-genai",
-    "litellm",
+    "litellm>=1.83.10",
     "mistralai",
     "openai",
     "openai-agents",
