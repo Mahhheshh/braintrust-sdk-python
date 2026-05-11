@@ -98,7 +98,7 @@ braintrust = ["py.typed"]
 
 # -- Base test deps (all sessions include this) --------------------------------
 test = [
-    "pytest==9.0.2",
+    "pytest==9.0.3",
     "pytest-asyncio==1.3.0",
     "pytest-vcr==1.0.2",
 ]
@@ -388,6 +388,8 @@ latest = "temporalio==1.27.0"
 "1.19.0" = "temporalio==1.19.0"
 
 [tool.braintrust.matrix.pytest-matrix]
+# Canonical pytest pin. The matching entry in [dependency-groups].test is
+# kept in sync by py/scripts/sync-pytest-pin.py (enforced by pre-commit).
 latest = "pytest==9.0.3"
 "8.4.2" = "pytest==8.4.2"
 
