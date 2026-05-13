@@ -1384,29 +1384,30 @@ class _HTTPBackgroundLogger:
                 if overflow_rows:
                     self._overflow_upload_count += 1
                 return
-            if error is None and resp is not None:
-                resp_errmsg = f"{resp.status_code}: {resp.text}"
-            else:
-                resp_errmsg = str(error)
+            has_response = error is None and resp is not None
+            is_413 = has_response and resp.status_code == 413
+            resp_errmsg = f"{resp.status_code}: {resp.text}" if has_response else str(error)
 
-            is_retrying = i + 1 < self.num_tries
-            retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {payload_bytes}.{retrying_text} Error: {resp_errmsg}"
+            should_retry = i + 1 < self.num_tries and not is_413
 
-            if not is_retrying and self.failed_publish_payloads_dir:
+            if not should_retry and self.failed_publish_payloads_dir:
                 _HTTPBackgroundLogger._write_payload_to_dir(
                     payload_dir=self.failed_publish_payloads_dir, payload=dataStr
                 )
                 self._log_failed_payloads_dir()
 
-            if not is_retrying and self.sync_flush:
+            retrying_text = " Retrying" if should_retry else ""
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {payload_bytes}.{retrying_text} Error: {resp_errmsg}"
+            if not should_retry and self.sync_flush:
                 raise Exception(errmsg)
-            else:
-                print(errmsg, file=self.outfile)
-                if is_retrying:
-                    sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
-                    print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
-                    time.sleep(sleep_time_s)
+            print(errmsg, file=self.outfile)
+
+            if is_413:
+                return
+            if should_retry:
+                sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
+                print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
+                time.sleep(sleep_time_s)
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
 
