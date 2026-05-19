@@ -2,7 +2,7 @@
 
 import pytest
 from autoevals import Levenshtein  # type: ignore[import-untyped]
-from braintrust.framework import Eval, EvalAsync, EvalCase, EvalScorer
+from braintrust.framework import Eval, EvalAsync, EvalCase, EvalScorer, Score
 
 
 def accepts_autoevals_scorer(
@@ -34,6 +34,25 @@ autoevals_scores_untyped = [
     Levenshtein,
     Levenshtein.partial(foo="bar"),
 ]
+
+
+def test_eval_accepts_autoevals_scorers_typed_sequence():
+    def scorer(input: str, output: str, expected: str | None = None) -> list[Score]:
+        return [Score(name="match", score=1.0)]
+
+    typed_scorer: EvalScorer[str, str, str] = scorer
+
+    result = Eval(
+        "test-autoevals-scorers",
+        data=autoevals_data,
+        task=autoevals_task,
+        scores=[typed_scorer],
+        no_send_logs=True,
+    )
+
+    score = result.results[0].scores["match"]
+    assert score is not None
+    assert score > 0
 
 
 def test_eval_accepts_autoevals_scorers_typed():
