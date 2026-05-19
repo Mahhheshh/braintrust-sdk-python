@@ -216,7 +216,7 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output, Expected]):
     metadata: Metadata | None = None
 
 
-OneOrMoreScores = float | int | bool | None | ScoreLike | list[ScoreLike]
+OneOrMoreScores = float | int | bool | None | ScoreLike | Sequence[ScoreLike]
 OneOrMoreClassifications = None | Classification | Mapping[str, Any] | list[Classification | Mapping[str, Any]]
 
 
