@@ -13,6 +13,7 @@ from braintrust.integrations import (
     AgnoIntegration,
     AnthropicIntegration,
     AutoGenIntegration,
+    Boto3Integration,
     ClaudeAgentSDKIntegration,
     CohereIntegration,
     CrewAIIntegration,
@@ -76,6 +77,7 @@ def auto_instrument(
     strands: bool = True,
     temporal: bool = True,
     livekit_agents: bool = True,
+    boto3: bool = True,
 ) -> dict[str, bool]:
     """
     Auto-instrument supported AI/ML libraries for Braintrust tracing.
@@ -203,7 +205,8 @@ def auto_instrument(
         results["temporal"] = _instrument_integration(TemporalIntegration)
     if livekit_agents:
         results["livekit_agents"] = _instrument_integration(LiveKitAgentsIntegration)
-
+    if boto3:
+        results["boto3"] = _instrument_integration(Boto3Integration)
     return results
 
 

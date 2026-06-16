@@ -230,6 +230,18 @@ def test_cohere(session, version):
     _run_tests(session, f"{INTEGRATION_DIR}/cohere/test_cohere.py", version=version)
 
 
+BOTO3_VERSIONS = _get_matrix_versions("boto3")
+
+
+@nox.session()
+@nox.parametrize("version", BOTO3_VERSIONS, ids=BOTO3_VERSIONS)
+def test_boto3(session, version):
+    """Test the native boto3 SDK integration."""
+    _install_test_deps(session)
+    _install_matrix_dep(session, "boto3", version)
+    _run_tests(session, f"{INTEGRATION_DIR}/boto3/test_boto3.py", version=version)
+
+
 INSTRUCTOR_VERSIONS = _get_matrix_versions("instructor")
 
 

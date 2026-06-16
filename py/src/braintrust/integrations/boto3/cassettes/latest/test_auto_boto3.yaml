@@ -1,0 +1,62 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "user", "content": [{"text": "what''s 2+2"}]}],
+      "system": [{"text": "answer only in single integer"}]}'
+    headers:
+      Content-Length:
+      - '124'
+      Content-Type:
+      - !!binary |
+        YXBwbGljYXRpb24vanNvbg==
+      User-Agent:
+      - !!binary |
+        Qm90bzMvMS40My4yNiBtZC9Cb3RvY29yZSMxLjQzLjI4IHVhLzIuMSBvcy9saW51eCM2LjguMC0x
+        MDUyLWF6dXJlIG1kL2FyY2gjeDg2XzY0IGxhbmcvcHl0aG9uIzMuMTIuMSBtZC9weWltcGwjQ1B5
+        dGhvbiBtL1osYixELGUgY2ZnL3JldHJ5LW1vZGUjbGVnYWN5IEJvdG9jb3JlLzEuNDMuMjg=
+      X-Amz-Date:
+      - !!binary |
+        MjAyNjA2MTJUMDkwMjE5Wg==
+      X-Amz-Security-Token:
+      - !!binary |
+        SVFvSmIzSnBaMmx1WDJWakVFWWFDWFZ6TFhkbGMzUXRNaUpITUVVQ0lFSlVDZDFxQlZncWhMd3BM
+        cFluTW92aWxVbnRZOVFTNm1HWitkT2lGdWxBQWlFQXFzYzJ0bXloWjk0N2J2ZXJsVW9yV3BkU0xK
+        UURmMEdlK0pIUHo4U0dhNWdxZ3dNSUR4QUFHZ3czTWpjMk5EWTBOelE0TkRVaURGWWh1dm52blpJ
+        bjJtMjYvaXJnQXZiNVIvV2FzOFFSeHBEQXozQ0ppM1hNcUFjR2JlU1FCS0psZklMUDBJWjQ2cW90
+        d1VNeGRRR0hkbnVvQk9XcnJGTzNGdVlrVkxqYXZHd0tDeWRhSkFlcC9iODR6QzRlbGhWZVNQNUNx
+        L1hNeGl5SHZaSHROZFdvMEVsN0Fma2dQNVhSUnNYM3ZRM0VER1Y4VW9JL0tSa3JHcGhwbWxtWWQv
+        dG9JdzJzeTRTYWJoNXpBL0NDRUJWRC9ETlJUaDkxR0MrQ1kvR0YrTk9JUk9lVFY1VmtzWndyOVpz
+        Tmh2NExqcURmeVdHVXoxbERwZmRzRUhPNHpRbjVBVy9oRGNuc04rYlFuR1NtSThaTjk1VTJsdVlr
+        elBPOGJUUzJobFJNeFN0KzZvbE1NZ09CUkFkbW1OamlYVGNaK3FkNnBCM2paWDcwVWpOZURIdCtJ
+        SDRoNUozVGxmVXR5ZG01TlBXdzZsb1l2WitPV1M2dUwyTVg1ZlhtWTlJMVBlZlV1M21KQTRFNlhN
+        aHNncmlYaWQ5THY1UFJoMU1ybTUvN2pOZTVkLzhuSTdJYTZlLytwTVJXYXEreHVvYzIxQWdob2JF
+        Q3lWUU1XcWZKSWZrclcxMGpMU3FPYlMwd2tMbXUwUVk2bVFHdmZCaitadTN6TnNpL0hRRUIzRjB6
+        QWtmRENHYmhYbXJrTzVjRkJPNG0zdFdjNmJoWGlST2o0QVRmVVRzSGVvOFlzOExhTEdsSGtSbmdt
+        WWc4Y3dPVG5FSTBUNldUQjVEYm41L2IybUN6dHdJNHdCTFBUUUhkcVRxVDJ2M05JbC8zTitpd0dQ
+        UytGRGRnYldPZXVjZEV6TWluWnNNRXJ4RUExK1dZMVNtMkp6alN6VmFOc0NZTDZXQ3A5dlNneUE3
+        U001aDFQVjlLRCtnPQ==
+      amz-sdk-invocation-id:
+      - !!binary |
+        MzkwYzg5YjktMjM4Ni00NWI1LTkzZTYtYjgyMjc1YWM2OWY2
+      amz-sdk-request:
+      - !!binary |
+        YXR0ZW1wdD0x
+    method: POST
+    uri: https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse
+  response:
+    body:
+      string: '{"metrics":{"latencyMs":269},"output":{"message":{"content":[{"text":"4"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"inputTokens":18,"outputTokens":5,"serverToolUsage":{},"totalTokens":23}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '202'
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 12 Jun 2026 09:02:20 GMT
+      x-amzn-RequestId:
+      - 20c1e6b5-f545-444a-8de6-a47e4c4c295a
+    status:
+      code: 200
+      message: OK
+version: 1

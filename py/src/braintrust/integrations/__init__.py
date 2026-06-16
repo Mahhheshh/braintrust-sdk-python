@@ -3,6 +3,7 @@ from .agentscope import AgentScopeIntegration
 from .agno import AgnoIntegration
 from .anthropic import AnthropicIntegration
 from .autogen import AutoGenIntegration
+from .boto3 import Boto3Integration
 from .claude_agent_sdk import ClaudeAgentSDKIntegration
 from .cohere import CohereIntegration
 from .crewai import CrewAIIntegration
@@ -29,6 +30,7 @@ __all__ = [
     "AgnoIntegration",
     "AnthropicIntegration",
     "AutoGenIntegration",
+    "Boto3Integration",
     "ClaudeAgentSDKIntegration",
     "CohereIntegration",
     "CrewAIIntegration",

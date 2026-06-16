@@ -437,6 +437,30 @@ class InstanceSetupFunctionPatcher(FunctionWrapperPatcher):
         return cls.wrapper(wrapped, instance, args, kwargs)
 
 
+class NestedFunctionWrapperPatcher(FunctionWrapperPatcher):
+    """Add Wrapping for target attribute when the object is formed; useful for dynamic sdk builders such as boto3"""
+
+    target_attribute: ClassVar[str]
+    nested_wrapper: ClassVar[Any]
+    wrapper: ClassVar[Any] = staticmethod(_call_wrapped)
+
+    @classmethod
+    def nested_patch_marker_attr(cls) -> str:
+        """Return the sentinel attribute used to mark an instance as set up."""
+        suffix = re.sub(r"\W+", "_", cls.name).strip("_")
+        return f"__braintrust_nested_patched_{suffix}__"
+
+    @classmethod
+    def _wrapper(cls, wrapped: Any, instance: Any, args: Any, kwargs: Any) -> Any:
+        obj = cls.wrapper(wrapped, instance, args, kwargs)
+        if not getattr(obj, cls.target_attribute, False):
+            return
+        marker = cls.nested_patch_marker_attr()
+        wrap_function_wrapper(obj, cls.target_attribute, cls.nested_wrapper)
+        setattr(obj, marker, True)
+        return obj
+
+
 class ClassReplacementPatcher(BasePatcher):
     """Base patcher for replacing an exported class with a tracing wrapper class.
 
