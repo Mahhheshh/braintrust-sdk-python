@@ -12,11 +12,11 @@ import pytest
 from braintrust import SpanCustomizer, logger, set_span_customizers
 from braintrust.integrations.pipecat import (
     BraintrustPipecatObserver,
-    PipecatIntegration,
     setup_pipecat,
     wrap_pipeline_worker,
 )
 from braintrust.integrations.test_utils import verify_autoinstrument_script
+from braintrust.integrations.versioning import detect_module_version, version_satisfies
 from braintrust.logger import Attachment
 from braintrust.test_helpers import init_test_logger
 
@@ -155,7 +155,6 @@ def _worker_runner_kwargs(**overrides):
     return kwargs
 
 
-@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_pipecat_observer_capture_audio_attachments_adds_tts_and_user_audio(memory_logger):
     TTSStartedFrame = _import("pipecat.frames.frames.TTSStartedFrame")
@@ -297,16 +296,25 @@ async def test_setup_pipecat_traces_real_pipeline_frames(memory_logger):
 
     @worker.event_handler("on_pipeline_started")
     async def on_pipeline_started(_worker, _frame):
-        await worker.queue_frames([LLMContextFrame(context), EndFrame()])
+        await worker.queue_frames([LLMContextFrame(context), EndFrame(reason="pipeline complete")])
 
     runner = WorkerRunner(**_worker_runner_kwargs())
     await runner.add_workers(worker)
     await asyncio.wait_for(runner.run(), timeout=20)
 
+    observer = next(o for o in getattr(worker, "_observer")._observers if isinstance(o, BraintrustPipecatObserver))
+    if version_satisfies(detect_module_version(importlib.import_module("pipecat"), ("pipecat",)), ">=1.12.0"):
+        assert observer.observe_every_push is False
+        assert not hasattr(observer, "_seen_frame_ids")
+    else:
+        assert observer._seen_frame_ids
+
     logs = memory_logger.pop()
     pipeline_span = _single_span(logs, "pipecat_pipeline")
     assert _span_type(pipeline_span) == "task"
     assert pipeline_span.get("metrics", {}).get("end") is not None
+    assert pipeline_span["metadata"]["terminal_frame"] == "EndFrame"
+    assert pipeline_span["metadata"]["reason"] == "pipeline complete"
 
     llm_span = _single_span(logs, "pipecat_llm_response")
     assert _span_type(llm_span) == "task"
@@ -336,7 +344,6 @@ def test_setup_and_wrap_pipeline_worker_are_idempotent():
     PipelineWorker = _import("pipecat.pipeline.worker.PipelineWorker")
     IdentityFilter = _import("pipecat.processors.filters.identity_filter.IdentityFilter")
 
-    assert PipecatIntegration.min_version == "1.3.0"
     assert setup_pipecat(project_name="test-project-pipecat-py-tracing")
     assert setup_pipecat(project_name="test-project-pipecat-py-tracing")
     assert setup_pipecat(project_name="test-project-pipecat-py-tracing", capture_audio_attachments=True)
