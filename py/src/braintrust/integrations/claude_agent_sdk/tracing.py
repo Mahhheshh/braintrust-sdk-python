@@ -1110,11 +1110,14 @@ class RequestTracker:
         query_start_time: float | None = None,
         captured_messages: list[dict[str, Any]] | None = None,
         include_partial_messages: bool = False,
+        verbatim_prompts: bool = False,
     ) -> None:
+        metadata = {"verbatim_prompts": True} if verbatim_prompts else None
         self._root_span = start_span(
             name=CLAUDE_AGENT_TASK_SPAN_NAME,
             span_attributes={"type": SpanTypeAttribute.TASK},
             input=prompt or None,
+            metadata=metadata,
             start_time=query_start_time,
         )
         self._context_tracker = ContextTracker(
@@ -1290,6 +1293,10 @@ def _include_partial_messages(options: Any) -> bool:
     return getattr(options, "include_partial_messages", False) is True
 
 
+def _verbatim_prompts(options: Any) -> bool:
+    return getattr(options, "verbatim_prompts", False) is True
+
+
 async def _stream_messages_with_tracing(
     generator: AsyncIterable[Any],
     *,
@@ -1337,6 +1344,7 @@ def _create_query_wrapper_function(original_query: Any) -> Any:
             query_start_time=query_start_time,
             captured_messages=captured_messages,
             include_partial_messages=_include_partial_messages(options),
+            verbatim_prompts=_verbatim_prompts(options),
         )
         generator = _bind_request_tracker_to_query(original_query(*args, **kwargs), request_tracker)
 
@@ -1357,6 +1365,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
         def __init__(self, *args: Any, **kwargs: Any):
             options = args[0] if args else kwargs.get("options")
             self.__include_partial_messages = _include_partial_messages(options)
+            self.__verbatim_prompts = _verbatim_prompts(options)
             client = original_client_class(*args, **kwargs)
             super().__init__(client)
             self.__client = client
@@ -1418,6 +1427,7 @@ def _create_client_wrapper_class(original_client_class: Any) -> Any:
                 query_start_time=self.__query_start_time,
                 captured_messages=self.__captured_messages,
                 include_partial_messages=self.__include_partial_messages,
+                verbatim_prompts=self.__verbatim_prompts,
             )
             query = getattr(self.__client, "_query", None)
             _install_query_message_tracing(query)
