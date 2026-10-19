@@ -463,19 +463,10 @@ LIVEKIT_AGENTS_VERSIONS = _get_matrix_versions("livekit-agents")
 def test_livekit_agents(session, version):
     _skip_if_incompatible(session)
     _install_test_deps(session)
+    # Install the locked plugins first so the matrix pin decides livekit-agents;
+    # 1.3.x needs its own group to keep OpenTelemetry below LogData's removal.
+    _install_group_locked(session, "test-livekit-agents-1-3" if version == "1.3.1" else "test-livekit-agents")
     _install_matrix_dep(session, "livekit-agents", version)
-    _install_group_locked(session, "test-livekit-agents")
-    if version == "1.3.1":
-        # LiveKit 1.3.1 accepts a newer OTLP exporter, but its dependencies
-        # require an SDK version that breaks LiveKit's LogData import. The
-        # locked group downgrades the exporter, so remove its now-orphaned deps.
-        session.run(
-            "uv",
-            "pip",
-            "uninstall",
-            "opentelemetry-exporter-otlp-common",
-            "opentelemetry-exporter-http-transport",
-        )
     livekit_server_dir = _ensure_livekit_server(session)
     env = {
         "LIVEKIT_URL": os.environ.get("LIVEKIT_URL", "ws://localhost:7880"),
@@ -661,6 +652,7 @@ GOOGLE_ADK_VERSIONS = _get_matrix_versions("google-adk")
 @nox.session()
 @nox.parametrize("version", GOOGLE_ADK_VERSIONS, ids=GOOGLE_ADK_VERSIONS)
 def test_google_adk(session, version):
+    _skip_if_incompatible(session)
     _install_test_deps(session)
     _install_matrix_dep(session, "google-adk", version, "test-sqlalchemy-2-0")
     _run_tests(session, f"{INTEGRATION_DIR}/adk/test_adk.py", version=version)
@@ -925,6 +917,7 @@ def pylint(session):
     minimum_python = {
         "ai-sdk": (3, 12),
         "agentscope": (3, 11),
+        "google-adk": (3, 11),
         "harbor": (3, 12),
         "pipecat-ai": (3, 11),
         "pydantic-ai-integration": (3, 11),
